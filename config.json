@@ -1,9 +1,9 @@
 {
   "rtsp_urls": {
-    "ra_front": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1",
-    "ra_rear": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=2&subtype=1",
-    "vao_front": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=3&subtype=1",
-    "vao_rear": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=4&subtype=1"
+    "ra_front": "rtsp://admin:123456@192.168.1.10:554/1",
+    "ra_rear": "rtsp://admin:123456@192.168.1.11:554/1",
+    "vao_front": "rtsp://admin:123456@192.168.1.12:554/1",
+    "vao_rear": "rtsp://admin:123456@192.168.1.13:554/1"
   },
   "serial": {
     "port_in": "COM3",
@@ -11,9 +11,13 @@
     "baud_rate": 19200
   },
   "database": {
-    "path": "parking.db"
+    "host": "localhost",
+    "port": "5432",
+    "user": "postgres",
+    "password": "your_password",
+    "dbname": "parking_db"
   },
   "save_directory": "D:\\DuLieuBaiXe",
   "log_file": "app.log",
-  "sound_file": null
+  "sound_file": "sounds/beep.wav"
 }

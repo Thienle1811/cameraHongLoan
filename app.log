@@ -26,3 +26,9 @@
 [2025-12-06 06:19:38] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
 [2025-12-06 06:20:00] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
 [2025-12-06 06:20:00] [INFO] [SYSTEM] Ứng dụng đã thoát
+[2025-12-06 11:08:46] [INFO] [SYSTEM] ==================================================
+[2025-12-06 11:08:46] [INFO] [SYSTEM] Khởi động ứng dụng Parking Control System
+[2025-12-06 11:08:46] [INFO] [SYSTEM] Thư mục lưu ảnh: D:\DuLieuBaiXe
+[2025-12-06 11:08:46] [INFO] [SYSTEM] File log: app.log
+[2025-12-06 11:08:46] [WARNING] [SYSTEM] Ứng dụng KHÔNG chạy với quyền Administrator - có thể không ghi được file
+[2025-12-06 11:08:46] [ERROR] [SYSTEM] Lỗi khởi tạo ứng dụng: 'ConfigManager' object has no attribute 'get_database_config'

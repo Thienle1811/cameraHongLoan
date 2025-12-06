@@ -1,119 +1,77 @@
-"""
-Quản lý lưu file ảnh theo cấu trúc thư mục quy định
-Format: D:\DuLieuBaiXe\[LAN]_[yyyyMMdd]\[LAN]_[yyyyMMdd_HHmmss]_front/rear.jpg
-"""
 import os
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Tuple
 from PyQt5.QtGui import QImage
 from logger import ParkingLogger
 
-
 class FileManager:
-    """Quản lý lưu file ảnh chụp từ camera"""
+    """
+    Quản lý lưu file ảnh từ Camera.
+    - Lưu tại: D:\DuLieuBaiXe\YYYY-MM-DD\
+    - Tên file: HH-MM-SS_dd-mm-yyyy_LAN_Truoc/Sau.jpg
+    """
     
-    def __init__(self, save_directory: str, logger: Optional[ParkingLogger] = None):
+    def __init__(self, save_directory: str, logger: ParkingLogger = None):
         """
         Khởi tạo FileManager
-        
-        Args:
-            save_directory: Thư mục gốc lưu ảnh
-            logger: Logger để ghi log
+        args:
+            save_directory: Thư mục gốc (Ví dụ: D:\DuLieuBaiXe)
         """
         self.save_directory = save_directory
         self.logger = logger
-        
-        # Tạo thư mục gốc nếu chưa có
+        # Đảm bảo thư mục gốc tồn tại
         self._ensure_directory_exists(save_directory)
     
     def _ensure_directory_exists(self, directory: str):
-        """Đảm bảo thư mục tồn tại"""
+        """Tạo thư mục nếu chưa có"""
         try:
             os.makedirs(directory, exist_ok=True)
         except OSError as e:
             if self.logger:
-                self.logger.log_file_error(f"Không thể tạo thư mục {directory}: {str(e)}")
+                self.logger.error(f"Không thể tạo thư mục {directory}: {str(e)}")
     
-    def save_capture(self, lane: str, front_image: Optional[QImage], 
-                     rear_image: Optional[QImage]) -> Tuple[bool, str, str]:
+    def save_capture(self, lane: str, card_code: str, front_image: QImage, rear_image: QImage) -> Tuple[bool, str, str]:
         """
-        Lưu ảnh chụp từ 2 camera của một làn
-        
-        Args:
-            lane: Tên làn ("RA" hoặc "VAO")
-            front_image: Ảnh từ camera trước
-            rear_image: Ảnh từ camera sau
-        
-        Returns:
-            Tuple (success, front_path, rear_path)
+        Lưu ảnh chụp từ 2 camera.
+        Trả về: (Success, Path_Front, Path_Rear)
         """
-        # Chuẩn hóa tên làn
-        lane_upper = lane.upper()
-        if lane_upper not in ["RA", "VAO"]:
-            lane_upper = "RA"  # Mặc định
-        
-        # Tạo timestamp
         now = datetime.now()
-        date_str = now.strftime("%Y%m%d")
-        time_str = now.strftime("%Y%m%d_%H%M%S")
         
-        # Tạo thư mục theo ngày
-        day_directory = os.path.join(self.save_directory, f"{lane_upper}_{date_str}")
+        # 1. Tạo tên thư mục theo ngày (Format: YYYY-MM-DD để dễ sort)
+        # Ví dụ: D:\DuLieuBaiXe\2025-12-04
+        folder_date = now.strftime("%Y-%m-%d")
+        day_directory = os.path.join(self.save_directory, folder_date)
         self._ensure_directory_exists(day_directory)
         
-        # Đường dẫn file
-        front_path = os.path.join(day_directory, f"{lane_upper}_{time_str}_front.jpg")
-        rear_path = os.path.join(day_directory, f"{lane_upper}_{time_str}_rear.jpg")
+        # 2. Tạo tên file theo yêu cầu: Giờ-Phút-Giây_Ngày-Tháng-Năm
+        # Lưu ý: Windows không cho phép dấu hai chấm (:) trong tên file
+        time_str = now.strftime("%H-%M-%S") 
+        date_str = now.strftime("%d-%m-%Y")
         
-        success = True
-        front_saved = False
-        rear_saved = False
+        lane_prefix = lane.upper() # RA hoặc VAO
         
-        # Lưu ảnh trước
-        if front_image:
-            try:
-                front_image.save(front_path, "JPEG", quality=95)
-                front_saved = True
-                if self.logger:
-                    self.logger.debug(f"Đã lưu ảnh trước: {front_path}", lane_upper)
-            except Exception as e:
-                success = False
-                if self.logger:
-                    self.logger.log_file_error(f"Không thể lưu ảnh trước: {str(e)}", lane_upper)
-        else:
-            success = False
+        # Format: 12-30-05_04-12-2025_RA_Front.jpg
+        # Thêm Lane và Front/Rear để tránh trùng tên nếu 2 xe vào cùng lúc
+        front_filename = f"{time_str}_{date_str}_{lane_prefix}_Front.jpg"
+        rear_filename = f"{time_str}_{date_str}_{lane_prefix}_Rear.jpg"
+        
+        # Đường dẫn đầy đủ
+        front_path = os.path.join(day_directory, front_filename)
+        rear_path = os.path.join(day_directory, rear_filename)
+        
+        try:
+            # Lưu ảnh Camera Trước
+            if front_image:
+                # Quality 85 là đủ đẹp và nhẹ
+                front_image.save(front_path, "JPG", quality=85)
+            
+            # Lưu ảnh Camera Sau
+            if rear_image:
+                rear_image.save(rear_path, "JPG", quality=85)
+                
+            return True, front_path, rear_path
+            
+        except Exception as e:
             if self.logger:
-                self.logger.log_file_error("Không có ảnh từ camera trước", lane_upper)
-        
-        # Lưu ảnh sau
-        if rear_image:
-            try:
-                rear_image.save(rear_path, "JPEG", quality=95)
-                rear_saved = True
-                if self.logger:
-                    self.logger.debug(f"Đã lưu ảnh sau: {rear_path}", lane_upper)
-            except Exception as e:
-                success = False
-                if self.logger:
-                    self.logger.log_file_error(f"Không thể lưu ảnh sau: {str(e)}", lane_upper)
-        else:
-            success = False
-            if self.logger:
-                self.logger.log_file_error("Không có ảnh từ camera sau", lane_upper)
-        
-        # Nếu một trong hai ảnh không lưu được, xóa ảnh đã lưu để đảm bảo tính nhất quán
-        if not success:
-            if front_saved and os.path.exists(front_path):
-                try:
-                    os.remove(front_path)
-                except:
-                    pass
-            if rear_saved and os.path.exists(rear_path):
-                try:
-                    os.remove(rear_path)
-                except:
-                    pass
+                self.logger.error(f"Lỗi lưu file ảnh: {e}")
             return False, "", ""
-        
-        return True, front_path, rear_path
-

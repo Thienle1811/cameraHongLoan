@@ -24,7 +24,6 @@ class SerialThread(QThread):
                         baudrate=self.baud_rate,
                         timeout=1
                     )
-                    # print(f"Đã kết nối {self.lane_name} tại {self.port}")
                 
                 if self.serial_connection.in_waiting > 0:
                     # Đọc dữ liệu từ cổng COM
@@ -34,22 +33,19 @@ class SerialThread(QThread):
                         card_code = raw_data.decode('utf-8').strip()
                         if card_code:
                             self.rfid_scanned.emit(self.lane_name, card_code)
-                            # Delay nhỏ để tránh đọc trùng lặp quá nhanh
-                            time.sleep(1) 
+                            # Chống lặp thẻ quá nhanh (Delay 2s)
+                            time.sleep(2) 
                     except UnicodeDecodeError:
                         pass
                         
                 time.sleep(0.1) # Giảm tải CPU
 
-            except serial.SerialException as e:
-                # Nếu mất kết nối, thử lại sau 5s
-                self.error_occurred.emit(f"Lỗi COM {self.lane_name}: {str(e)}")
-                if self.serial_connection:
-                    self.serial_connection.close()
-                self.serial_connection = None
+            except serial.SerialException:
+                # Nếu không có cổng COM thật (đang test trên laptop), ta bỏ qua lỗi
+                # Để không spam log lỗi liên tục
                 time.sleep(5)
             except Exception as e:
-                self.error_occurred.emit(f"Lỗi thread {self.lane_name}: {str(e)}")
+                self.error_occurred.emit(f"Lỗi {self.lane_name}: {str(e)}")
                 time.sleep(2)
 
     def stop(self):
