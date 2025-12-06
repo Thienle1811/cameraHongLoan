@@ -1,0 +1,28 @@
+[2025-12-06 06:14:35] [INFO] [SYSTEM] ==================================================
+[2025-12-06 06:14:35] [INFO] [SYSTEM] Khởi động ứng dụng Parking Control System
+[2025-12-06 06:14:35] [INFO] [SYSTEM] Thư mục lưu ảnh: D:\DuLieuBaiXe
+[2025-12-06 06:14:35] [INFO] [SYSTEM] File log: app.log
+[2025-12-06 06:14:35] [WARNING] [SYSTEM] Ứng dụng KHÔNG chạy với quyền Administrator - có thể không ghi được file
+[2025-12-06 06:14:35] [ERROR] [SYSTEM] File error: Không thể tạo thư mục D:\DuLieuBaiXe: [WinError 3] The system cannot find the path specified: 'D:\\'
+[2025-12-06 06:14:35] [INFO] [SYSTEM] Hệ thống đã khởi động hoàn tất
+[2025-12-06 06:19:12] [INFO] [SYSTEM] ==================================================
+[2025-12-06 06:19:12] [INFO] [SYSTEM] Khởi động ứng dụng Parking Control System
+[2025-12-06 06:19:12] [INFO] [SYSTEM] Thư mục lưu ảnh: D:\DuLieuBaiXe
+[2025-12-06 06:19:12] [INFO] [SYSTEM] File log: app.log
+[2025-12-06 06:19:12] [WARNING] [SYSTEM] Ứng dụng KHÔNG chạy với quyền Administrator - có thể không ghi được file
+[2025-12-06 06:19:12] [ERROR] [SYSTEM] File error: Không thể tạo thư mục D:\DuLieuBaiXe: [WinError 3] The system cannot find the path specified: 'D:\\'
+[2025-12-06 06:19:12] [INFO] [SYSTEM] Hệ thống đã khởi động hoàn tất
+[2025-12-06 06:19:13] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:13] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:18] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:18] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:23] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:23] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:28] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:28] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:33] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:33] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:38] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:19:38] [ERROR] [SYSTEM] Lỗi COM VAO: could not open port 'COM3': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:20:00] [ERROR] [SYSTEM] Lỗi COM RA: could not open port 'COM1': FileNotFoundError(2, 'The system cannot find the file specified.', None, 2)
+[2025-12-06 06:20:00] [INFO] [SYSTEM] Ứng dụng đã thoát

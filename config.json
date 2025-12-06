@@ -5,8 +5,15 @@
     "vao_front": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=3&subtype=1",
     "vao_rear": "rtsp://admin2:123321abc@192.168.1.108:554/cam/realmonitor?channel=4&subtype=1"
   },
+  "serial": {
+    "port_in": "COM3",
+    "port_out": "COM1",
+    "baud_rate": 19200
+  },
+  "database": {
+    "path": "parking.db"
+  },
   "save_directory": "D:\\DuLieuBaiXe",
-  "log_file": "D:\\DuLieuBaiXe\\app.log",
+  "log_file": "app.log",
   "sound_file": null
 }
-

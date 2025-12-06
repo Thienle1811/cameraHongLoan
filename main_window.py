@@ -1,12 +1,9 @@
-"""
-Giao diện chính của ứng dụng Parking Control System
-Layout 2 cột: Làn RA (trái) và Làn VÀO (phải) - Giao diện đơn giản hóa
-"""
+import time
 from datetime import datetime
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QMessageBox, QFrame)
+                             QPushButton, QLabel, QMessageBox, QFrame, QSplitter)
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer
-from PyQt5.QtGui import QFont, QKeyEvent
+from PyQt5.QtGui import QFont, QKeyEvent, QColor
 
 from camera_widget import CameraWidget
 from camera_thread import CameraThread
@@ -15,328 +12,298 @@ from file_manager import FileManager
 from logger import ParkingLogger
 from sound_player import SoundPlayer
 
+# --- MODULE MỚI ---
+from database import ParkingDatabase
+from serial_manager import SerialThread
 
 class MainWindow(QMainWindow):
-    """Cửa sổ chính của ứng dụng"""
+    """Cửa sổ chính của ứng dụng - Đã tích hợp RFID và Database"""
     
     def __init__(self, config_manager: ConfigManager, logger: ParkingLogger):
         super().__init__()
         self.config_manager = config_manager
         self.logger = logger
         
-        # Sound player với đường dẫn từ config
+        # 1. Khởi tạo Database
+        db_path = config_manager.get_database_path()
+        self.db = ParkingDatabase(db_path)
+        
+        # 2. Khởi tạo Sound & File Manager
         sound_file = config_manager.get("sound_file")
         self.sound_player = SoundPlayer(sound_file)
         
-        # File manager
         save_dir = config_manager.get_save_directory()
         self.file_manager = FileManager(save_dir, logger)
         
-        # Camera threads và widgets
+        # 3. Biến quản lý Camera và Serial
         self.camera_threads = {}
         self.camera_widgets = {}
+        self.serial_threads = []
         
+        # Biến UI để cập nhật thông tin thẻ
+        self.info_labels = {} 
+        self.status_frames = {} 
+
         # Timer cho đồng hồ
         self.clock_timer = QTimer()
         self.clock_timer.timeout.connect(self.update_clock)
-        self.clock_timer.start(1000)  # Cập nhật mỗi giây
+        self.clock_timer.start(1000)
         
         self.init_ui()
         self.init_cameras()
+        self.init_serial_readers()
         
-        # Log khởi động
-        self.logger.info("Ứng dụng đã khởi động")
+        self.logger.info("Hệ thống đã khởi động hoàn tất")
     
     def init_ui(self):
-        """Khởi tạo giao diện"""
-        self.setWindowTitle("Hệ Thống Quản Lý Bãi Xe - Parking Control System")
+        """Khởi tạo giao diện người dùng"""
+        self.setWindowTitle("Hệ Thống Quản Lý Bãi Xe (RFID Integrated)")
         self.setMinimumSize(1600, 900)
+        self.setStyleSheet("background-color: #1e1e1e; color: #ffffff;")
         
-        # Áp dụng dark theme cho toàn bộ cửa sổ
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #1e1e1e;
-            }
-            QWidget {
-                background-color: #1e1e1e;
-                color: #ffffff;
-            }
-        """)
-        
-        # Widget trung tâm
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        central_widget.setStyleSheet("background-color: #1e1e1e;")
-        
-        # Layout chính (dọc: Header + Content)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
         # === HEADER ===
-        header_widget = self.create_header()
-        main_layout.addWidget(header_widget)
+        main_layout.addWidget(self.create_header())
         
-        # === CONTENT (2 cột) ===
+        # === CONTENT AREA (Chia đôi màn hình) ===
         content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: #1e1e1e;")
         content_layout = QHBoxLayout(content_widget)
-        content_layout.setSpacing(5)
-        content_layout.setContentsMargins(5, 5, 5, 5)
+        content_layout.setSpacing(10)
+        content_layout.setContentsMargins(10, 10, 10, 10)
         
-        # === LÀN XE RA (Bên trái) ===
-        lane_ra_widget = self.create_lane_widget("RA", "XÁC NHẬN XE RA", 
-                                                 "#FF4444", "#FF6666", 
-                                                 "CAM RA - TRƯỚC", "CAM RA - SAU",
-                                                 "(Nhấn SPACE hoặc Click)")
-        content_layout.addWidget(lane_ra_widget, 1)
+        # LÀN RA (Trái)
+        self.lane_ra_ui = self.create_lane_panel("RA", "LÀN XE RA", "#FF4444")
+        content_layout.addWidget(self.lane_ra_ui, 1)
         
-        # === LÀN XE VÀO (Bên phải) ===
-        lane_vao_widget = self.create_lane_widget("VAO", "XÁC NHẬN XE VÀO", 
-                                                  "#4488FF", "#6699FF",
-                                                  "CAM VÀO - TRƯỚC", "CAM VÀO - SAU",
-                                                  "(Nhấn ENTER hoặc Click)")
-        content_layout.addWidget(lane_vao_widget, 1)
+        # LÀN VÀO (Phải)
+        self.lane_vao_ui = self.create_lane_panel("VAO", "LÀN XE VÀO", "#4488FF")
+        content_layout.addWidget(self.lane_vao_ui, 1)
         
         main_layout.addWidget(content_widget, 1)
-    
-    def create_header(self) -> QWidget:
-        """Tạo header với tên công ty, đồng hồ, và tên phần mềm"""
+
+    def create_header(self):
+        """Tạo thanh tiêu đề"""
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background-color: #2d2d2d;
-                border-bottom: 2px solid #444;
-            }
-        """)
+        header.setStyleSheet("background-color: #2d2d2d; border-bottom: 2px solid #555;")
         header.setFixedHeight(60)
-        
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(20, 10, 20, 10)
         
-        # Tên công ty (góc trái)
-        company_label = QLabel("Quản lý bãi xe")  # Có thể thay đổi tên công ty
-        company_font = QFont("Arial", 14, QFont.Bold)
-        company_label.setFont(company_font)
-        company_label.setStyleSheet("color: #ffffff;")
-        layout.addWidget(company_label)
+        lbl_company = QLabel("BÃI XE THÔNG MINH")
+        lbl_company.setFont(QFont("Arial", 14, QFont.Bold))
+        layout.addWidget(lbl_company)
         
-        # Spacer
         layout.addStretch()
         
-        # Đồng hồ (giữa)
         self.clock_label = QLabel()
-        clock_font = QFont("Arial", 16, QFont.Bold)
-        self.clock_label.setFont(clock_font)
-        self.clock_label.setStyleSheet("color: #4CAF50;")
-        self.clock_label.setAlignment(Qt.AlignCenter)
-        self.update_clock()  # Cập nhật ngay lần đầu
+        self.clock_label.setFont(QFont("Arial", 16, QFont.Bold))
+        self.clock_label.setStyleSheet("color: #00FF00;")
+        self.update_clock()
         layout.addWidget(self.clock_label)
         
-        # Spacer
         layout.addStretch()
         
-        # Tên phần mềm (góc phải)
-        app_label = QLabel("Parking Control System")
-        app_font = QFont("Arial", 12, QFont.Bold)
-        app_label.setFont(app_font)
-        app_label.setStyleSheet("color: #ffffff;")
-        layout.addWidget(app_label)
+        lbl_app = QLabel("Parking Control System v2.0")
+        lbl_app.setFont(QFont("Arial", 12))
+        layout.addWidget(lbl_app)
         
         return header
-    
+
+    def create_lane_panel(self, lane_key, title, color_code):
+        """Tạo giao diện cho một làn xe"""
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.Box)
+        self.status_frames[lane_key] = panel 
+        panel.setStyleSheet(f"border: 2px solid {color_code}; background-color: #252525;")
+        
+        layout = QVBoxLayout(panel)
+        
+        # 1. Tiêu đề làn
+        lbl_title = QLabel(title)
+        lbl_title.setAlignment(Qt.AlignCenter)
+        lbl_title.setFont(QFont("Arial", 16, QFont.Bold))
+        lbl_title.setStyleSheet(f"background-color: {color_code}; color: white; padding: 5px;")
+        layout.addWidget(lbl_title)
+        
+        # 2. Camera (Trước & Sau)
+        cam_front = CameraWidget(f"{lane_key.lower()}_front", "CAM TRƯỚC", self)
+        cam_rear = CameraWidget(f"{lane_key.lower()}_rear", "CAM SAU", self)
+        
+        self.camera_widgets[f"{lane_key.lower()}_front"] = cam_front
+        self.camera_widgets[f"{lane_key.lower()}_rear"] = cam_rear
+        
+        layout.addWidget(cam_front, 1)
+        layout.addWidget(cam_rear, 1)
+        
+        # 3. Khu vực thông tin thẻ
+        info_group = QFrame()
+        info_group.setStyleSheet("background-color: #333; border-radius: 5px;")
+        info_layout = QVBoxLayout(info_group)
+        
+        lbl_card_code = QLabel("Mã thẻ: ---")
+        lbl_card_code.setFont(QFont("Arial", 12, QFont.Bold))
+        
+        lbl_status = QLabel("Trạng thái: Đang chờ...")
+        lbl_status.setFont(QFont("Arial", 14, QFont.Bold))
+        lbl_status.setWordWrap(True)
+        
+        lbl_price = QLabel("") 
+        lbl_price.setFont(QFont("Arial", 18, QFont.Bold))
+        lbl_price.setStyleSheet("color: yellow;")
+        
+        info_layout.addWidget(lbl_card_code)
+        info_layout.addWidget(lbl_status)
+        info_layout.addWidget(lbl_price)
+        
+        self.info_labels[lane_key] = {
+            "code": lbl_card_code,
+            "status": lbl_status,
+            "price": lbl_price
+        }
+        
+        # 4. Nút bấm thủ công
+        btn_manual = QPushButton(f"CHỤP ẢNH THỦ CÔNG ({'SPACE' if lane_key == 'RA' else 'ENTER'})")
+        btn_manual.setStyleSheet(f"background-color: {color_code}; font-weight: bold; padding: 10px;")
+        btn_manual.clicked.connect(lambda: self.process_transaction(lane_key, "MANUAL_TRIGGER"))
+        layout.addWidget(btn_manual)
+        
+        return panel
+
+    def init_cameras(self):
+        """Khởi tạo luồng camera RTSP"""
+        camera_keys = ["ra_front", "ra_rear", "vao_front", "vao_rear"]
+        for key in camera_keys:
+            url = self.config_manager.get_rtsp_url(key)
+            if url:
+                thread = CameraThread(url, key)
+                # --- ĐÂY LÀ ĐOẠN ĐÃ FIX LỖI TYPE ERROR ---
+                thread.status_changed.connect(lambda status, k=key: self.on_camera_status(status, k))
+                
+                self.camera_threads[key] = thread
+                if key in self.camera_widgets:
+                    self.camera_widgets[key].set_camera_thread(thread)
+                thread.start()
+
+    def init_serial_readers(self):
+        """Khởi tạo luồng đọc thẻ RFID"""
+        serial_cfg = self.config_manager.get_serial_config()
+        
+        if serial_cfg.get("port_in"):
+            t_in = SerialThread(serial_cfg["port_in"], serial_cfg["baud_rate"], "VAO")
+            t_in.rfid_scanned.connect(self.on_rfid_scanned)
+            t_in.error_occurred.connect(lambda msg: self.logger.error(msg))
+            self.serial_threads.append(t_in)
+            t_in.start()
+            
+        if serial_cfg.get("port_out"):
+            t_out = SerialThread(serial_cfg["port_out"], serial_cfg["baud_rate"], "RA")
+            t_out.rfid_scanned.connect(self.on_rfid_scanned)
+            t_out.error_occurred.connect(lambda msg: self.logger.error(msg))
+            self.serial_threads.append(t_out)
+            t_out.start()
+
+    @pyqtSlot(str, str)
+    def on_rfid_scanned(self, lane, card_code):
+        self.logger.info(f"Phát hiện thẻ {card_code} tại làn {lane}")
+        self.process_transaction(lane, card_code)
+
+    def process_transaction(self, lane, card_code):
+        front_key = f"{lane.lower()}_front"
+        rear_key = f"{lane.lower()}_rear"
+        
+        img_front = self.camera_widgets[front_key].get_current_frame()
+        img_rear = self.camera_widgets[rear_key].get_current_frame()
+        
+        if not img_front or not img_rear:
+            self.show_message(lane, "LỖI CAMERA", "Không lấy được hình ảnh!", False)
+            return
+
+        success, path_front, path_rear = self.file_manager.save_capture(lane, img_front, img_rear)
+        if not success:
+            self.show_message(lane, "LỖI LƯU FILE", "Không thể ghi ảnh vào ổ cứng", False)
+            return
+
+        if lane == "VAO":
+            self.handle_check_in(card_code, path_front, path_rear)
+        else:
+            self.handle_check_out(card_code, path_front, path_rear)
+
+    def handle_check_in(self, card_code, img_front, img_rear):
+        success, msg = self.db.check_in(card_code, img_front, img_rear)
+        self.show_message("VAO", card_code, msg, success)
+        if success:
+            self.logger.info(f"Xe vào thành công: {card_code}")
+
+    def handle_check_out(self, card_code, img_front, img_rear):
+        success, msg, info = self.db.check_out(card_code, img_front, img_rear)
+        if success:
+            price = info.get('price', 0)
+            msg_full = f"{msg}\nGiờ vào: {info['checkin_time']}"
+            self.show_message("RA", card_code, msg_full, True, price)
+            self.logger.info(f"Xe ra thành công: {card_code}, Phí: {price}")
+        else:
+            self.show_message("RA", card_code, msg, False)
+
+    def show_message(self, lane, code, status, is_success, price=None):
+        labels = self.info_labels.get(lane)
+        frame = self.status_frames.get(lane)
+        
+        if not labels or not frame:
+            return
+            
+        labels["code"].setText(f"Mã thẻ: {code}")
+        labels["status"].setText(status)
+        
+        if price is not None:
+            labels["price"].setText(f"THU TIỀN: {price:,} VNĐ")
+        else:
+            labels["price"].setText("")
+
+        if is_success:
+            style = "border: 4px solid #00FF00; background-color: #252525;"
+            labels["status"].setStyleSheet("color: #00FF00;")
+            self.sound_player.play_capture_sound() 
+        else:
+            style = "border: 4px solid #FF0000; background-color: #330000;"
+            labels["status"].setStyleSheet("color: #FF0000; font-weight: bold; font-size: 16px;")
+            
+        frame.setStyleSheet(style)
+        QTimer.singleShot(5000, lambda: self.reset_ui(lane))
+
+    def reset_ui(self, lane):
+        frame = self.status_frames.get(lane)
+        labels = self.info_labels.get(lane)
+        if frame:
+            color = "#FF4444" if lane == "RA" else "#4488FF"
+            frame.setStyleSheet(f"border: 2px solid {color}; background-color: #252525;")
+        if labels:
+            labels["code"].setText("Mã thẻ: ---")
+            labels["status"].setText("Đang chờ xe...")
+            labels["status"].setStyleSheet("color: white;")
+            labels["price"].setText("")
+
     def update_clock(self):
-        """Cập nhật đồng hồ realtime"""
         now = datetime.now()
-        time_str = now.strftime("%d/%m/%Y %H:%M:%S")
-        self.clock_label.setText(time_str)
-    
-    def create_lane_widget(self, lane_key: str, button_text: str, 
-                           border_color: str, button_color: str,
-                           front_label: str, rear_label: str,
-                           shortcut_hint: str) -> QWidget:
-        """Tạo widget cho một làn xe với layout mới"""
-        lane_widget = QFrame()
-        lane_widget.setFrameStyle(QFrame.Box)
-        lane_widget.setStyleSheet(f"""
-            QFrame {{
-                border: 3px solid {border_color};
-                background-color: #1e1e1e;
-            }}
-        """)
-        
-        layout = QVBoxLayout(lane_widget)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        # === PHẦN CAMERA (70% chiều cao) ===
-        camera_container = QWidget()
-        camera_layout = QVBoxLayout(camera_container)
-        camera_layout.setSpacing(5)
-        camera_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Widget camera trước
-        front_widget = CameraWidget(f"{lane_key.lower()}_front", front_label, self)
-        front_widget.setMinimumHeight(250)
-        camera_layout.addWidget(front_widget, 1)
-        self.camera_widgets[f"{lane_key.lower()}_front"] = front_widget
-        
-        # Widget camera sau
-        rear_widget = CameraWidget(f"{lane_key.lower()}_rear", rear_label, self)
-        rear_widget.setMinimumHeight(250)
-        camera_layout.addWidget(rear_widget, 1)
-        self.camera_widgets[f"{lane_key.lower()}_rear"] = rear_widget
-        
-        layout.addWidget(camera_container, 7)  # 70% chiều cao
-        
-        # === PHẦN NÚT (30% chiều cao) ===
-        # Nút bấm lớn
-        btn_confirm = QPushButton()
-        btn_confirm.setMinimumHeight(100)
-        btn_confirm.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {button_color};
-                color: white;
-                font-size: 24px;
-                font-weight: bold;
-                border: none;
-                border-radius: 10px;
-                padding: 15px;
-            }}
-            QPushButton:hover {{
-                background-color: {border_color};
-            }}
-            QPushButton:pressed {{
-                background-color: {border_color};
-                border: 3px solid white;
-            }}
-        """)
-        
-        # Text nút với 2 dòng (sử dụng \n)
-        button_text_full = f"{button_text}\n{shortcut_hint}"
-        btn_confirm.setText(button_text_full)
-        btn_confirm.setToolTip(f"Phím tắt: {'SPACE' if lane_key == 'RA' else 'ENTER'}")
-        
-        # Kết nối signal
-        btn_confirm.clicked.connect(lambda: self.capture_lane(lane_key))
-        
-        layout.addWidget(btn_confirm, 3)  # 30% chiều cao
-        
-        return lane_widget
-    
+        self.clock_label.setText(now.strftime("%d/%m/%Y %H:%M:%S"))
+
+    def on_camera_status(self, status, key):
+        pass
+
     def keyPressEvent(self, event: QKeyEvent):
-        """Xử lý phím tắt"""
         if event.key() == Qt.Key_Space:
-            # SPACE cho XE RA
-            self.capture_lane("RA")
-            event.accept()
+            self.process_transaction("RA", "TEST_KEY_RA")
         elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
-            # ENTER cho XE VÀO
-            self.capture_lane("VAO")
-            event.accept()
+            self.process_transaction("VAO", "TEST_KEY_VAO")
         else:
             super().keyPressEvent(event)
-    
-    def init_cameras(self):
-        """Khởi tạo và kết nối các camera"""
-        camera_keys = ["ra_front", "ra_rear", "vao_front", "vao_rear"]
-        
-        for camera_key in camera_keys:
-            rtsp_url = self.config_manager.get_rtsp_url(camera_key)
-            if not rtsp_url:
-                self.logger.error(f"Không tìm thấy RTSP URL cho {camera_key}")
-                continue
-            
-            # Tạo camera thread
-            thread = CameraThread(rtsp_url, camera_key, reconnect_delay=3)
-            thread.error_occurred.connect(
-                lambda msg, key=camera_key: self.logger.log_rtsp_connection(key, False, msg)
-            )
-            thread.status_changed.connect(
-                lambda status, key=camera_key: self.on_camera_status_changed(key, status)
-            )
-            
-            self.camera_threads[camera_key] = thread
-            
-            # Gán thread cho widget
-            if camera_key in self.camera_widgets:
-                self.camera_widgets[camera_key].set_camera_thread(thread)
-            
-            # Bắt đầu thread
-            thread.start()
-            self.logger.info(f"Đã khởi động camera thread: {camera_key}")
-    
-    @pyqtSlot(str, str)
-    def on_camera_status_changed(self, camera_key: str, status: str):
-        """Xử lý khi trạng thái camera thay đổi"""
-        connected = (status == "connected")
-        self.logger.log_rtsp_connection(camera_key, connected)
-    
-    def capture_lane(self, lane_key: str):
-        """Chụp ảnh từ 2 camera của một làn"""
-        lane_name = "RA" if lane_key == "RA" else "VAO"
-        
-        # Lấy frame từ 2 camera
-        front_key = f"{lane_key.lower()}_front"
-        rear_key = f"{lane_key.lower()}_rear"
-        
-        front_widget = self.camera_widgets.get(front_key)
-        rear_widget = self.camera_widgets.get(rear_key)
-        
-        if not front_widget or not rear_widget:
-            self.logger.error(f"Không tìm thấy camera widget cho làn {lane_name}", lane_name)
-            return
-        
-        front_image = front_widget.get_current_frame()
-        rear_image = rear_widget.get_current_frame()
-        
-        if not front_image or not rear_image:
-            self.logger.warning(f"Không có frame để chụp - Làn {lane_name}", lane_name)
-            QMessageBox.warning(self, "Cảnh báo", 
-                              f"Không thể chụp ảnh. Vui lòng kiểm tra kết nối camera của Làn {lane_name}.")
-            return
-        
-        # Lưu ảnh
-        success, front_path, rear_path = self.file_manager.save_capture(
-            lane_name, front_image, rear_image
-        )
-        
-        if success:
-            # Phát âm thanh
-            self.sound_player.play_capture_sound()
-            
-            # Ghi log
-            self.logger.log_capture(lane_name, True, front_path, rear_path)
-        else:
-            # Ghi log lỗi
-            self.logger.log_capture(lane_name, False)
-            QMessageBox.critical(self, "Lỗi", 
-                               f"Không thể lưu ảnh cho Làn {lane_name}. Vui lòng kiểm tra quyền ghi file.")
-    
+
     def closeEvent(self, event):
-        """Xử lý khi đóng ứng dụng"""
-        # Chấp nhận event trước để UI không bị đơ
+        for t in self.serial_threads:
+            t.stop()
+        for t in self.camera_threads.values():
+            t.stop()
         event.accept()
-        
-        # Dừng timer
-        if self.clock_timer:
-            self.clock_timer.stop()
-            self.clock_timer = None
-        
-        # Cleanup sound player
-        if self.sound_player and hasattr(self.sound_player, 'sound_effect'):
-            if self.sound_player.sound_effect:
-                try:
-                    self.sound_player.sound_effect.stop()
-                except Exception:
-                    pass
-        
-        # Dừng tất cả camera threads (với timeout)
-        for camera_key, thread in list(self.camera_threads.items()):
-            try:
-                self.logger.info(f"Dừng camera thread: {camera_key}")
-                thread.stop()
-            except Exception as e:
-                self.logger.error(f"Lỗi khi dừng thread {camera_key}: {e}")
-        
-        self.logger.info("Ứng dụng đã đóng")
